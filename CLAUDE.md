@@ -45,6 +45,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 ## Conventions
 - Request enums have `encode(&self, &mut BytesMut)`, which writes the full frame including the length prefix. Response enums have `decode(Bytes)`.
 - Unknown message codes decode to `Unknown { code, payload }`; they never become errors.
+- `crates/net/tests/end_to_end.rs` runs a fake server on localhost with two real `Client`s (A shares, B downloads). Extend it for new peer or transfer flows; it also runs in CI.
 - Every new message gets a unit test. Where the spec has a hex example, the test asserts the encoding byte for byte.
 - Before finishing: `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
 - Log with `tracing`, to stderr for CLI commands and to a file once the TUI exists.
@@ -76,7 +77,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 3. [x] Search (FileSearch → zlib-compressed FileSearchResponse)
 4. [x] Download (QueueUpload → TransferRequest/Response → F connection → FileOffset)
 5. [x] ratatui TUI (search → pick → download, transfer list)
-6. [~] Sharing: index, search answers, browse and uploads done; live test pending. Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
+6. [~] Sharing: index, search answers, browse and uploads done. Uploads pass the end-to-end tests (direct, indirect, resume); the live test against other clients is still pending. Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
 7. [ ] Distributed network
 8. [ ] Extras: wishlist, browse, PMs, UPnP, MPRIS
 9. [ ] AUR release, once stable
