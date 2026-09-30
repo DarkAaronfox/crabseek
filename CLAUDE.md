@@ -28,12 +28,12 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - Peer connections follow the spec's "modern" order: `ConnectToPeer` and `GetPeerAddress` are sent together, and the direct and indirect attempts race keyed by token. If both fail, or 30s pass, a `PeerConnectFailed` event is emitted.
 - Tokens for searches and connection requests come from one shared counter (`Tokens`). Search results whose token is not in `searches` are dropped.
 - `crates/seekr`: the binary. Without a subcommand it starts the TUI (`src/tui/`):
-  - `app.rs`: state and key handling.
+  - `app.rs`: state and key handling. Digits build a vim count (`App::count`) for the next motion (`10k`, `5G`), so tabs use `Alt-1…4` / `F1…F4` / `Tab`.
   - `results.rs`: the search results as a folder tree; the cursor follows its row when results are re-sorted. `FormatFilter` (cycled with `f`/`F`) hides non-matching audio; non-audio files always stay visible.
   - `login.rs`: the login form.
   - `transfers.rs` / `uploads.rs`: the download and upload lists (`SpeedMeter` smooths speeds).
   - `../persist.rs`: `downloads.json`. Unfinished downloads are queued again on start (like Nicotine+).
-  - `ui.rs`: rendering; only visible rows are built.
+  - `ui.rs`: rendering; only visible rows are built. Lossy formats are summarized by kbps (estimated as `~N` from size and duration when the peer sends none; an `.m4a` above 600 kbps counts as ALAC, so it is lossless).
   - While the TUI runs, logs go to `~/.local/state/seekr/seekr.log`.
   - Render tests use `TestBackend` together with `Client::offline()`.
 - CLI subcommands for testing: `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `download <USER> <REMOTE PATH>`, `config-path`. The ratatui TUI will live here later.
@@ -60,7 +60,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - Settings tab (`tui/settings.rs`): `download_dir` is applied live through `Client::set_download_dir`. `shared_dirs` defaults to the XDG music dir (`~/Music`) and is only stored until milestone 6.
 
 ## Packaging
-- `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `scripts/uninstall.sh [--purge]` removes it; `--purge` also deletes config, data, state and cache (after confirmation) but never downloads.
+- `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `scripts/uninstall.sh [-y]` removes everything (binary, config, data, state, cache) after one confirmation, but never touches downloads.
 - `packaging/aur/PKGBUILD` is a draft for a future AUR release; it is not published.
 - CI (`.github/workflows/ci.yml`) runs fmt, clippy and tests on `main`.
 - The README is user-facing and in English; keep its key table in sync with `help_line` in `tui/ui.rs`.
