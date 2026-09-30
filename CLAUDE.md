@@ -28,6 +28,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - `client/uploads.rs`: `QueueUpload` → queue → `TransferRequest` (upload) → `TransferResponse` → our `F` connection (`Purpose::Upload`) → token, the peer's FileOffset, file data. Slots are fair per user. `SendUploadSpeed` is sent after each upload.
   - `distrib_conn.rs`: read-only `D` connection to a (possible) parent; it closes when its handle is dropped.
   - `client/distrib.rs`: child-only membership in the distributed network. After login: `HaveNoParent(true)` and `AcceptChildren(false)`. `PossibleParents` leads to `start_connect_known` (`Purpose::ParentCandidate`). The first candidate that sends a search after its `BranchLevel` becomes the parent, and we report `HaveNoParent(false)`, `BranchLevel(level+1)` and `BranchRoot`. Server `EmbeddedMessage` means we are a branch root. `ResetDistributed` and losing the parent both mean searching again.
+  - `portmap.rs`: UPnP IGD through `igd-next`. SSDP discovery goes **unicast to the default gateway first** (read from `/proc/net/route`), because ufw drops the reply to a multicast search (it comes from a different address). Multicast is the fallback. Mappings have a 1h lease, renewed every 30 min by the actor's `portmap_task`; they are unmapped when UPnP is turned off or the port changes. `PortInUse` counts as an existing manual forward. `behind_another_nat` flags a private or CGNAT WAN IP. The dev machine is double-NATed (the router's WAN is 192.168.100.2).
   - `client.rs`: the actor. `Pending.purpose` says whether a connection is the user's `P` connection or an upload's `F` connection. It owns the server writer, the listener, the peer map and the pending connection attempts. Callers use `Client` and receive `Event`s.
 - Peer connections follow the spec's "modern" order: `ConnectToPeer` and `GetPeerAddress` are sent together, and the direct and indirect attempts race keyed by token. If both fail, or 30s pass, a `PeerConnectFailed` event is emitted.
 - Tokens for searches and connection requests come from one shared counter (`Tokens`). Search results whose token is not in `searches` are dropped.
@@ -42,12 +43,13 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - Quality strings (`src/search.rs`): kbps is always shown, estimated as `~N` from size and duration when the peer sends none. Lossless files also show sample rate and bit depth, and an `.m4a` above 600 kbps counts as ALAC, so it is lossless. Folder summaries use the minimum kbps for lossy folders and the average for lossless ones.
   - While the TUI runs, logs go to `~/.local/state/seekr/seekr.log`.
   - Render tests use `TestBackend` together with `Client::offline()`. `results.rs` has an ignored ingest benchmark (`cargo test --release -p seekr ingest -- --ignored --nocapture`).
-- CLI subcommands (for testing and scripting): `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `browse <USER>`, `download <USER> <REMOTE PATH>`, `logout`, `config-path`.
+- CLI subcommands (for testing and scripting): `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `browse <USER>`, `portmap`, `download <USER> <REMOTE PATH>`, `logout`, `config-path`.
 - The actor sends `SetStatus(online)` after login and `ServerPing` every 60s.
 
 ## Conventions
 - Request enums have `encode(&self, &mut BytesMut)`, which writes the full frame including the length prefix. Response enums have `decode(Bytes)`.
 - Unknown message codes decode to `Unknown { code, payload }`; they never become errors.
+- Regression tests must fail without the fix: when adding one, temporarily reintroduce the bug and watch the test fail. Fallback paths (for example, indirect connections) can hide failures of the main path, so assert the path too (`ConnectMethod::Direct`).
 - `crates/net/tests/end_to_end.rs` runs a fake server on localhost with two real `Client`s (A shares, B downloads). Extend it for new peer or transfer flows; it also runs in CI.
 - Every new message gets a unit test. Where the spec has a hex example, the test asserts the encoding byte for byte.
 - Before finishing: `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test`.
@@ -87,5 +89,5 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 5. [x] ratatui TUI (search → pick → download, transfer list)
 6. [x] Sharing: index, search answers, browse and uploads. End-to-end tests cover direct, indirect and resume. Live-tested on 2026-09-30 on the real network against slskd 0.26.0 as downloader: browse parsed correctly, and a 3.3 MB FLAC arrived byte-identical (sha256). Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
 7. [x] Distributed network, child only. Live-tested 2026-09-30: adopted a real parent within seconds and answered strangers' searches, and an slskd network-wide search found a probe file shared only by seekr. Next step: accept children and relay searches to them (needs a child connection manager and `AcceptChildren(true)`).
-8. [~] Extras: browse done (live-tested: 28 713 files from a real user). Still to do: wishlist, PMs, UPnP, MPRIS.
+8. [~] Extras: browse done (live-tested: 28 713 files from a real user). UPnP is done (live-tested on the dev router, mapping plus renewal). Still to do: wishlist, PMs, MPRIS.
 9. [ ] AUR release, once stable
