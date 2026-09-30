@@ -16,7 +16,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - `search.rs`: `SearchResponse` / `SearchFile`, including the zlib body and attribute helpers.
   - `shares.rs`: browse bodies (`SharedFileList`, `FolderContents`, both zlib-compressed).
   - File-connection messages (`FileTransferInit` = bare u32 token, `FileOffset` = bare u64) have no frame and are read and written directly in `net`.
-  - Planned: `distrib.rs` (milestone 7).
+  - `distrib.rs`: `DistribMsg` (u8 codes). `DistribSearch` must carry identifier 49. `decode_body` unpacks embedded messages.
 - `crates/net` (`seekr-net`): tokio networking.
   - `server.rs`: `ServerConnection` handles login and can be split into a reader and a writer.
   - `connect.rs`: opens direct and pierce connections over a list of candidate addresses, and `read_init` reads exactly one init frame. `candidates` tries loopback first when a peer's IP equals ours (NAT hairpin), which also makes two local instances work.
@@ -26,6 +26,8 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - `shares.rs`: `ShareIndex::scan` walks `shared_dirs` (hidden entries skipped) into virtual paths `<root name>\\rel\\path`. Audio properties come from lofty and are cached by path, size and mtime. It also provides search matching (all terms, `-exclude`) and browse listings.
   - `client/sharing.rs`: rescans, `SharedFoldersFiles`, and answers to server-relayed `FileSearch`, `SharedFileListRequest` and `FolderContentsRequest`.
   - `client/uploads.rs`: `QueueUpload` → queue → `TransferRequest` (upload) → `TransferResponse` → our `F` connection (`Purpose::Upload`) → token, the peer's FileOffset, file data. Slots are fair per user. `SendUploadSpeed` is sent after each upload.
+  - `distrib_conn.rs`: read-only `D` connection to a (possible) parent; it closes when its handle is dropped.
+  - `client/distrib.rs`: child-only membership in the distributed network. After login: `HaveNoParent(true)` and `AcceptChildren(false)`. `PossibleParents` leads to `start_connect_known` (`Purpose::ParentCandidate`). The first candidate that sends a search after its `BranchLevel` becomes the parent, and we report `HaveNoParent(false)`, `BranchLevel(level+1)` and `BranchRoot`. Server `EmbeddedMessage` means we are a branch root. `ResetDistributed` and losing the parent both mean searching again.
   - `client.rs`: the actor. `Pending.purpose` says whether a connection is the user's `P` connection or an upload's `F` connection. It owns the server writer, the listener, the peer map and the pending connection attempts. Callers use `Client` and receive `Event`s.
 - Peer connections follow the spec's "modern" order: `ConnectToPeer` and `GetPeerAddress` are sent together, and the direct and indirect attempts race keyed by token. If both fail, or 30s pass, a `PeerConnectFailed` event is emitted.
 - Tokens for searches and connection requests come from one shared counter (`Tokens`). Search results whose token is not in `searches` are dropped.
@@ -83,6 +85,6 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 4. [x] Download (QueueUpload → TransferRequest/Response → F connection → FileOffset)
 5. [x] ratatui TUI (search → pick → download, transfer list)
 6. [x] Sharing: index, search answers, browse and uploads. End-to-end tests cover direct, indirect and resume. Live-tested on 2026-09-30 on the real network against slskd 0.26.0 as downloader: browse parsed correctly, and a 3.3 MB FLAC arrived byte-identical (sha256). Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
-7. [ ] Distributed network
+7. [x] Distributed network, child only. Live-tested 2026-09-30: adopted a real parent within seconds and answered strangers' searches, and an slskd network-wide search found a probe file shared only by seekr. Next step: accept children and relay searches to them (needs a child connection manager and `AcceptChildren(true)`).
 8. [ ] Extras: wishlist, browse, PMs, UPnP, MPRIS
 9. [ ] AUR release, once stable
