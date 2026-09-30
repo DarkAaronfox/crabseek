@@ -50,7 +50,10 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - `~/.config/seekr/config.toml` (`src/config.rs`) holds `username`, `password`, and optionally `server`, `listen_port`, `download_dir` (default `~/Downloads/seekr`).
 - It is written only through `write_private`, which writes a temp file and renames it (mode 600, directory 700), and it keeps unknown keys.
 - Never commit it and never log credentials. `~/.config` is itself a public dotfiles repo, which ignores `seekr/`.
-- First run: the TUI shows `tui/login.rs`, which checks the spec's username rules. Credentials are saved only after the server accepts them. If saved credentials are rejected, the form reappears. `seekr logout` clears them.
+- First run: the TUI shows `tui/login.rs`, which checks the spec's username rules. Credentials are saved only after the server accepts them, and the file and folder are created at that point.
+- With saved credentials, only a small "Connecting as …" splash appears. Network or port errors show the splash with `r` to retry. The form comes back only for INVALIDPASS or INVALIDUSERNAME. `seekr logout` clears the credentials.
+- Password storage matches Nicotine+ and slskd (plain text in the config); ours has 600 permissions. Do not "encrypt" it with a key kept on disk. A keyring would be an opt-in feature.
+- Settings tab (`tui/settings.rs`): `download_dir` is applied live through `Client::set_download_dir`. `shared_dirs` defaults to the XDG music dir (`~/Music`) and is only stored until milestone 6.
 
 ## Packaging
 - `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `--uninstall` removes it.
