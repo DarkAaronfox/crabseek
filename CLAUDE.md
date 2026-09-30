@@ -35,13 +35,14 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - `app.rs`: state and key handling. Digits build a vim count (`App::count`) for the next motion (`10k`, `5G`), so tabs use `Alt-1…4` / `F1…F4` / `Tab`.
   - `results.rs`: the search results as a folder tree; the cursor follows its row when results are re-sorted. `FormatFilter` (cycled with `f`/`F`) hides non-matching audio; non-audio files always stay visible.
   - `login.rs`: the login form.
+  - Browse tab (tab 5, also opened by `b` on a result): `Client::browse` → `Event::BrowseResult`. `share_list_as_response` turns the list into a `SearchResponse`, so the same `Results` tree, filter and download code serve both tabs (`Which::{Search, Browse}`). `render_result_list` draws either, with `show_user: false` for browse.
   - `transfers.rs` / `uploads.rs`: the download and upload lists (`SpeedMeter` smooths speeds).
   - `../persist.rs`: `downloads.json`. Unfinished downloads are queued again on start (like Nicotine+).
   - `ui.rs`: rendering; only visible rows are built.
   - Quality strings (`src/search.rs`): kbps is always shown, estimated as `~N` from size and duration when the peer sends none. Lossless files also show sample rate and bit depth, and an `.m4a` above 600 kbps counts as ALAC, so it is lossless. Folder summaries use the minimum kbps for lossy folders and the average for lossless ones.
   - While the TUI runs, logs go to `~/.local/state/seekr/seekr.log`.
   - Render tests use `TestBackend` together with `Client::offline()`. `results.rs` has an ignored ingest benchmark (`cargo test --release -p seekr ingest -- --ignored --nocapture`).
-- CLI subcommands (for testing and scripting): `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `download <USER> <REMOTE PATH>`, `logout`, `config-path`.
+- CLI subcommands (for testing and scripting): `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `browse <USER>`, `download <USER> <REMOTE PATH>`, `logout`, `config-path`.
 - The actor sends `SetStatus(online)` after login and `ServerPing` every 60s.
 
 ## Conventions
@@ -86,5 +87,5 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 5. [x] ratatui TUI (search → pick → download, transfer list)
 6. [x] Sharing: index, search answers, browse and uploads. End-to-end tests cover direct, indirect and resume. Live-tested on 2026-09-30 on the real network against slskd 0.26.0 as downloader: browse parsed correctly, and a 3.3 MB FLAC arrived byte-identical (sha256). Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
 7. [x] Distributed network, child only. Live-tested 2026-09-30: adopted a real parent within seconds and answered strangers' searches, and an slskd network-wide search found a probe file shared only by seekr. Next step: accept children and relay searches to them (needs a child connection manager and `AcceptChildren(true)`).
-8. [ ] Extras: wishlist, browse, PMs, UPnP, MPRIS
+8. [~] Extras: browse done (live-tested: 28 713 files from a real user). Still to do: wishlist, PMs, UPnP, MPRIS.
 9. [ ] AUR release, once stable
