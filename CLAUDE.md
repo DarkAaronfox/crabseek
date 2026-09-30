@@ -14,13 +14,15 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - `peer_init.rs`: PeerInit / PierceFireWall and `ConnectionType`.
   - `peer.rs`: `PeerMsg` (one enum for both directions).
   - `search.rs`: `SearchResponse` / `SearchFile`, including the zlib body and attribute helpers.
-  - Planned: `distrib.rs`, `file.rs`.
+  - `shares.rs`: browse bodies (`SharedFileList`, `FolderContents`, both zlib-compressed).
+  - File-connection messages (`FileTransferInit` = bare u32 token, `FileOffset` = bare u64) have no frame and are read and written directly in `net`.
+  - Planned: `distrib.rs` (milestone 7).
 - `crates/net` (`seekr-net`): tokio networking.
   - `server.rs`: `ServerConnection` handles login and can be split into a reader and a writer.
-  - `connect.rs`: opens direct and pierce connections, and `read_init` reads exactly one init frame.
+  - `connect.rs`: opens direct and pierce connections over a list of candidate addresses, and `read_init` reads exactly one init frame. `candidates` tries loopback first when a peer's IP equals ours (NAT hairpin), which also makes two local instances work.
   - `peer.rs`: the reader and writer tasks of a `P` connection.
   - `transfer.rs`: `receive` writes an `F` connection's data into `<file>.part`, resumes from an existing `.part` via FileOffset, and renames the file when done. `local_path` maps a remote path to `<download_dir>/<remote parent folder>/<name>`, sanitized.
-  - `client/downloads.rs`: download bookkeeping for the actor (QueueUpload → TransferRequest → F connection). Until sharing exists, requests to download from us are answered with `File not shared.`.
+  - `client/downloads.rs`: download bookkeeping for the actor (QueueUpload → TransferRequest → F connection).
   - `shares.rs`: `ShareIndex::scan` walks `shared_dirs` (hidden entries skipped) into virtual paths `<root name>\\rel\\path`. Audio properties come from lofty and are cached by path, size and mtime. It also provides search matching (all terms, `-exclude`) and browse listings.
   - `client/sharing.rs`: rescans, `SharedFoldersFiles`, and answers to server-relayed `FileSearch`, `SharedFileListRequest` and `FolderContentsRequest`.
   - `client/uploads.rs`: `QueueUpload` → queue → `TransferRequest` (upload) → `TransferResponse` → our `F` connection (`Purpose::Upload`) → token, the peer's FileOffset, file data. Slots are fair per user. `SendUploadSpeed` is sent after each upload.
@@ -33,10 +35,12 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - `login.rs`: the login form.
   - `transfers.rs` / `uploads.rs`: the download and upload lists (`SpeedMeter` smooths speeds).
   - `../persist.rs`: `downloads.json`. Unfinished downloads are queued again on start (like Nicotine+).
-  - `ui.rs`: rendering; only visible rows are built. Lossy formats are summarized by kbps (estimated as `~N` from size and duration when the peer sends none; an `.m4a` above 600 kbps counts as ALAC, so it is lossless).
+  - `ui.rs`: rendering; only visible rows are built.
+  - Quality strings (`src/search.rs`): kbps is always shown, estimated as `~N` from size and duration when the peer sends none. Lossless files also show sample rate and bit depth, and an `.m4a` above 600 kbps counts as ALAC, so it is lossless. Folder summaries use the minimum kbps for lossy folders and the average for lossless ones.
   - While the TUI runs, logs go to `~/.local/state/seekr/seekr.log`.
-  - Render tests use `TestBackend` together with `Client::offline()`.
-- CLI subcommands for testing: `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `download <USER> <REMOTE PATH>`, `config-path`. The ratatui TUI will live here later.
+  - Render tests use `TestBackend` together with `Client::offline()`. `results.rs` has an ignored ingest benchmark (`cargo test --release -p seekr ingest -- --ignored --nocapture`).
+- CLI subcommands (for testing and scripting): `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `download <USER> <REMOTE PATH>`, `logout`, `config-path`.
+- The actor sends `SetStatus(online)` after login and `ServerPing` every 60s.
 
 ## Conventions
 - Request enums have `encode(&self, &mut BytesMut)`, which writes the full frame including the length prefix. Response enums have `decode(Bytes)`.
@@ -51,13 +55,14 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - Logging in with an unknown username **registers a new account**, so never test with made-up credentials.
 
 ## Config & login
-- `~/.config/seekr/config.toml` (`src/config.rs`) holds `username`, `password`, and optionally `server`, `listen_port`, `download_dir` (default `~/Downloads/seekr`).
+- `~/.config/seekr/config.toml` (`src/config.rs`) holds `username`, `password`, and optionally `server`, `listen_port`, `download_dir` (default `~/Downloads/seekr`), `shared_dirs` (default the XDG music dir, `~/Music`) and `upload_slots` (default 2).
+- Other files: `~/.local/share/seekr/downloads.json` (download list), `~/.cache/seekr/shares.json` (audio property cache), `~/.local/state/seekr/seekr.log` (TUI log). Every path comes from `directories`, so XDG_* overrides work, which is handy for a second test instance.
 - It is written only through `write_private`, which writes a temp file and renames it (mode 600, directory 700), and it keeps unknown keys.
 - Never commit it and never log credentials. `~/.config` is itself a public dotfiles repo, which ignores `seekr/`.
 - First run: the TUI shows `tui/login.rs`, which checks the spec's username rules. Credentials are saved only after the server accepts them, and the file and folder are created at that point.
 - With saved credentials, only a small "Connecting as …" splash appears. Network or port errors show the splash with `r` to retry. The form comes back only for INVALIDPASS or INVALIDUSERNAME. `seekr logout` clears the credentials.
 - Password storage matches Nicotine+ and slskd (plain text in the config); ours has 600 permissions. Do not "encrypt" it with a key kept on disk. A keyring would be an opt-in feature.
-- Settings tab (`tui/settings.rs`): `download_dir` is applied live through `Client::set_download_dir`. `shared_dirs` defaults to the XDG music dir (`~/Music`) and is only stored until milestone 6.
+- Settings tab (`tui/settings.rs`) has the download folder, the listen port and the shared folders. The download folder applies live through `Client::set_download_dir`. The port uses `Client::set_listen_port`; it rebinds, sends `SetWaitPort`, and is saved only after an `Event::ListenPort` success. Changing the shared folders saves them and calls `Client::rescan_shares`.
 
 ## Packaging
 - `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `scripts/uninstall.sh [-y]` removes everything (binary, config, data, state, cache) after one confirmation, but never touches downloads.
