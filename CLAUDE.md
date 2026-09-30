@@ -65,6 +65,11 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - Password storage matches Nicotine+ and slskd (plain text in the config); ours has 600 permissions. Do not "encrypt" it with a key kept on disk. A keyring would be an opt-in feature.
 - Settings tab (`tui/settings.rs`) has the download folder, the listen port and the shared folders. The download folder applies live through `Client::set_download_dir`. The port uses `Client::set_listen_port`; it rebinds, sends `SetWaitPort`, and is saved only after an `Event::ListenPort` success. Changing the shared folders saves them and calls `Client::rescan_shares`.
 
+## Interop testing
+- `target/interop/` (git-ignored) holds an slskd 0.26.0 binary and a throwaway Soulseek test account (`slskd-account.txt`).
+- Run seekr with XDG_* pointing into that folder and `listen_port = 2240`, and slskd headless with `--no-auth --http-port 5040 --slsk-listen-port 50301` (5031 collides with slskd's own HTTPS port). Drive it through `/api/v0/users/<u>/browse` and `/api/v0/transfers/downloads/<u>`.
+- Delete the temporary seekr config afterwards, because it holds the user's password.
+
 ## Packaging
 - `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `scripts/uninstall.sh [-y]` removes everything (binary, config, data, state, cache) after one confirmation, but never touches downloads.
 - `packaging/aur/PKGBUILD` is a draft for a future AUR release; it is not published.
@@ -77,7 +82,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 3. [x] Search (FileSearch → zlib-compressed FileSearchResponse)
 4. [x] Download (QueueUpload → TransferRequest/Response → F connection → FileOffset)
 5. [x] ratatui TUI (search → pick → download, transfer list)
-6. [~] Sharing: index, search answers, browse and uploads done. Uploads pass the end-to-end tests (direct, indirect, resume); the live test against other clients is still pending. Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
+6. [x] Sharing: index, search answers, browse and uploads. End-to-end tests cover direct, indirect and resume. Live-tested on 2026-09-30 on the real network against slskd 0.26.0 as downloader: browse parsed correctly, and a 3.3 MB FLAC arrived byte-identical (sha256). Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
 7. [ ] Distributed network
 8. [ ] Extras: wishlist, browse, PMs, UPnP, MPRIS
 9. [ ] AUR release, once stable
