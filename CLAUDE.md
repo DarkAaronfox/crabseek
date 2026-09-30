@@ -21,18 +21,22 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
   - `peer.rs`: the reader and writer tasks of a `P` connection.
   - `transfer.rs`: `receive` writes an `F` connection's data into `<file>.part`, resumes from an existing `.part` via FileOffset, and renames the file when done. `local_path` maps a remote path to `<download_dir>/<remote parent folder>/<name>`, sanitized.
   - `client/downloads.rs`: download bookkeeping for the actor (QueueUpload → TransferRequest → F connection). Until sharing exists, requests to download from us are answered with `File not shared.`.
-  - `client.rs`: the actor. It owns the server writer, the listener, the peer map and the pending connection attempts. Callers use `Client` and receive `Event`s.
+  - `shares.rs`: `ShareIndex::scan` walks `shared_dirs` (hidden entries skipped) into virtual paths `<root name>\\rel\\path`. Audio properties come from lofty and are cached by path, size and mtime. It also provides search matching (all terms, `-exclude`) and browse listings.
+  - `client/sharing.rs`: rescans, `SharedFoldersFiles`, and answers to server-relayed `FileSearch`, `SharedFileListRequest` and `FolderContentsRequest`.
+  - `client/uploads.rs`: `QueueUpload` → queue → `TransferRequest` (upload) → `TransferResponse` → our `F` connection (`Purpose::Upload`) → token, the peer's FileOffset, file data. Slots are fair per user. `SendUploadSpeed` is sent after each upload.
+  - `client.rs`: the actor. `Pending.purpose` says whether a connection is the user's `P` connection or an upload's `F` connection. It owns the server writer, the listener, the peer map and the pending connection attempts. Callers use `Client` and receive `Event`s.
 - Peer connections follow the spec's "modern" order: `ConnectToPeer` and `GetPeerAddress` are sent together, and the direct and indirect attempts race keyed by token. If both fail, or 30s pass, a `PeerConnectFailed` event is emitted.
 - Tokens for searches and connection requests come from one shared counter (`Tokens`). Search results whose token is not in `searches` are dropped.
 - `crates/seekr`: the binary. Without a subcommand it starts the TUI (`src/tui/`):
   - `app.rs`: state and key handling.
   - `results.rs`: the search results as a folder tree; the cursor follows its row when results are re-sorted. `FormatFilter` (cycled with `f`/`F`) hides non-matching audio; non-audio files always stay visible.
   - `login.rs`: the login form.
-  - `transfers.rs`: the download list with smoothed speeds.
+  - `transfers.rs` / `uploads.rs`: the download and upload lists (`SpeedMeter` smooths speeds).
+  - `../persist.rs`: `downloads.json`. Unfinished downloads are queued again on start (like Nicotine+).
   - `ui.rs`: rendering; only visible rows are built.
   - While the TUI runs, logs go to `~/.local/state/seekr/seekr.log`.
   - Render tests use `TestBackend` together with `Client::offline()`.
-- CLI subcommands for testing: `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `download <USER> <REMOTE PATH>`, `config-path`. The ratatui TUI will live here later.
+- CLI subcommands for testing: `login`, `userinfo <USER>`, `online`, `search <QUERY> [--full-paths]`, `shares [QUERY] [--dir D]`, `download <USER> <REMOTE PATH>`, `config-path`. The ratatui TUI will live here later.
 
 ## Conventions
 - Request enums have `encode(&self, &mut BytesMut)`, which writes the full frame including the length prefix. Response enums have `decode(Bytes)`.
@@ -56,7 +60,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - Settings tab (`tui/settings.rs`): `download_dir` is applied live through `Client::set_download_dir`. `shared_dirs` defaults to the XDG music dir (`~/Music`) and is only stored until milestone 6.
 
 ## Packaging
-- `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `--uninstall` removes it.
+- `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `scripts/uninstall.sh [--purge]` removes it; `--purge` also deletes config, data, state and cache (after confirmation) but never downloads.
 - `packaging/aur/PKGBUILD` is a draft for a future AUR release; it is not published.
 - CI (`.github/workflows/ci.yml`) runs fmt, clippy and tests on `main`.
 - The README is user-facing and in English; keep its key table in sync with `help_line` in `tui/ui.rs`.
@@ -67,7 +71,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 3. [x] Search (FileSearch → zlib-compressed FileSearchResponse)
 4. [x] Download (QueueUpload → TransferRequest/Response → F connection → FileOffset)
 5. [x] ratatui TUI (search → pick → download, transfer list)
-6. [ ] Sharing (required, because leechers get banned). The user wants `~/Music` shared by default.
+6. [~] Sharing: index, search answers, browse and uploads done; live test pending. Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
 7. [ ] Distributed network
 8. [ ] Extras: wishlist, browse, PMs, UPnP, MPRIS
 9. [ ] AUR release, once stable
