@@ -33,11 +33,12 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - Peer connections follow the spec's "modern" order: `ConnectToPeer` and `GetPeerAddress` are sent together, and the direct and indirect attempts race keyed by token. If both fail, or 30s pass, a `PeerConnectFailed` event is emitted.
 - Tokens for searches and connection requests come from one shared counter (`Tokens`). Search results whose token is not in `searches` are dropped.
 - `crates/seekr`: the binary. Without a subcommand it starts the TUI (`src/tui/`):
-  - `app.rs`: state and key handling. Digits build a vim count (`App::count`) for the next motion (`10k`, `5G`), so tabs use `Alt-1…4` / `F1…F4` / `Tab`.
+  - `app.rs`: state and key handling. Digits build a vim count (`App::count`) for the next motion (`10k`, `5G`), so tabs use `Alt-1…6` / `F1…F6` / `Tab`.
   - `results.rs`: the search results as a folder tree; the cursor follows its row when results are re-sorted. `FormatFilter` (cycled with `f`/`F`) hides non-matching audio; non-audio files always stay visible.
   - `login.rs`: the login form.
   - Browse tab (tab 5, also opened by `b` on a result): `Client::browse` → `Event::BrowseResult`. `share_list_as_response` turns the list into a `SearchResponse`, so the same `Results` tree, filter and download code serve both tabs (`Which::{Search, Browse}`). `render_result_list` draws either, with `show_user: false` for browse.
   - `transfers.rs` / `uploads.rs`: the download and upload lists (`SpeedMeter` smooths speeds).
+  - `buddies.rs`: Buddies tab (tab 6). Buddies are watched with `Client::watch_user` (server `WatchUser`); the answers (`WatchUser`, `UserStatus`, `UserStats`) arrive as `Event::ServerMessage`. The server pushes status changes but not stats, so `GetUserStats` is sent for every buddy whenever the tab is opened. `A` on a result, download or upload adds that user. Saved in `buddies.json` next to `downloads.json`.
   - `../persist.rs`: `downloads.json`. Unfinished downloads are queued again on start (like Nicotine+).
   - `ui.rs`: rendering; only visible rows are built.
   - Quality strings (`src/search.rs`): kbps is always shown, estimated as `~N` from size and duration when the peer sends none. Lossless files also show sample rate and bit depth, and an `.m4a` above 600 kbps counts as ALAC, so it is lossless. Folder summaries use the minimum kbps for lossy folders and the average for lossless ones.
@@ -62,7 +63,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 
 ## Config & login
 - `~/.config/seekr/config.toml` (`src/config.rs`) holds `username`, `password`, and optionally `server`, `listen_port`, `download_dir` (default `~/Downloads/seekr`), `shared_dirs` (default the XDG music dir, `~/Music`) and `upload_slots` (default 2).
-- Other files: `~/.local/share/seekr/downloads.json` (download list), `~/.cache/seekr/shares.json` (audio property cache), `~/.local/state/seekr/seekr.log` (TUI log). Every path comes from `directories`, so XDG_* overrides work, which is handy for a second test instance.
+- Other files: `~/.local/share/seekr/downloads.json` (download list), `~/.local/share/seekr/buddies.json` (buddy names), `~/.cache/seekr/shares.json` (audio property cache), `~/.local/state/seekr/seekr.log` (TUI log). Every path comes from `directories`, so XDG_* overrides work, which is handy for a second test instance.
 - It is written only through `write_private`, which writes a temp file and renames it (mode 600, directory 700), and it keeps unknown keys.
 - Never commit it and never log credentials. `~/.config` is itself a public dotfiles repo, which ignores `seekr/`.
 - First run: the TUI shows `tui/login.rs`, which checks the spec's username rules. Credentials are saved only after the server accepts them, and the file and folder are created at that point.
@@ -89,5 +90,5 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 5. [x] ratatui TUI (search → pick → download, transfer list)
 6. [x] Sharing: index, search answers, browse and uploads. End-to-end tests cover direct, indirect and resume. Live-tested on 2026-09-30 on the real network against slskd 0.26.0 as downloader: browse parsed correctly, and a 3.3 MB FLAC arrived byte-identical (sha256). Default share is `~/Music`, which does not exist on the dev machine. Searches mostly arrive through the distributed network (milestone 7), so until then only user and room searches reach us.
 7. [x] Distributed network, child only. Live-tested 2026-09-30: adopted a real parent within seconds and answered strangers' searches, and an slskd network-wide search found a probe file shared only by seekr. Next step: accept children and relay searches to them (needs a child connection manager and `AcceptChildren(true)`).
-8. [~] Extras: browse done (live-tested: 28 713 files from a real user). UPnP is done (live-tested on the dev router, mapping plus renewal). Still to do: wishlist, PMs, MPRIS.
+8. [~] Extras: browse done (live-tested: 28 713 files from a real user). UPnP is done (live-tested on the dev router, mapping plus renewal). Buddy list done (tab 6). Still to do: wishlist, PMs, MPRIS.
 9. [ ] AUR release, once stable
