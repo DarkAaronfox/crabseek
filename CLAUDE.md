@@ -97,7 +97,9 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 
 ## Packaging
 - `scripts/install.sh` installs to `~/.local/bin` (on PATH through `~/.config/fish/config.fish`). `scripts/uninstall.sh [-y]` removes everything (binary, config, data, state, cache) after one confirmation, but never touches downloads.
-- `packaging/aur/PKGBUILD` is a draft for a future AUR release; it is not published.
+- `packaging/aur/PKGBUILD` and `.SRCINFO` are final for v0.1.0 (checksum pinned, built with makepkg from the GitHub tarball, depends `libgcc glibc`). Not on the AUR yet: account registration was closed on 2026-10-01. To push: `git clone ssh://aur@aur.archlinux.org/crabseek.git`, copy both files in, commit, push.
+- Releases: a `v*` tag runs `.github/workflows/release.yml`, which builds the binary on Ubuntu 22.04 (glibc 2.35; its symbols only need 2.34) and attaches `crabseek-X.Y.Z-x86_64-linux.tar.gz` (binary, LICENSE, README, `crabseek.service.in`) plus `.sha256`. Rebuild an existing tag's assets with `gh workflow run release.yml -f tag=vX.Y.Z`. Do not upload binaries built on the dev machine: CachyOS's glibc 2.39 would lock out older systems.
+- `scripts/get.sh` is the `curl | sh` installer. It takes the latest release, verifies the sha256, installs to `~/.local/bin` plus the user unit, and supports `--version` and `--uninstall` (which reads its prompt from `/dev/tty`).
 - CI (`.github/workflows/ci.yml`) runs fmt, clippy and tests on `main`.
 - The README is user-facing and in English; keep its key table in sync with `help_line` in `tui/ui.rs`.
 
