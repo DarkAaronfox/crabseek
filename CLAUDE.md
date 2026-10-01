@@ -33,7 +33,7 @@ Terminal Soulseek client in Rust. The protocol layer and the TUI are written fro
 - Peer connections follow the spec's "modern" order: `ConnectToPeer` and `GetPeerAddress` are sent together, and the direct and indirect attempts race keyed by token. If both fail, or 30s pass, a `PeerConnectFailed` event is emitted.
 - Tokens for searches and connection requests come from one shared counter (`Tokens`). Search results whose token is not in `searches` are dropped.
 - `crates/seekr`: the binary. Without a subcommand it starts the TUI (`src/tui/`):
-  - `app.rs`: state and key handling. Digits build a vim count (`App::count`) for the next motion (`10k`, `5G`), so tabs use `Alt-1…6` / `F1…F6` / `Tab`.
+  - `app.rs`: state and key handling. Digits build a vim count (`App::count`) for the next motion (`10k`, `5G`), so tabs use `Alt-1…6` / `F1…F6` / `Tab`. The TUI starts with the results list focused; `s` or `/` open the search box (`/` on Browse edits the username instead), and `Alt-s` toggles box ↔ list from anywhere, since it types nothing.
   - `results.rs`: the search results as a folder tree; the cursor follows its row when results are re-sorted. `FormatFilter` (cycled with `f`/`F`) hides non-matching audio; non-audio files always stay visible.
   - `login.rs`: the login form.
   - Browse tab (tab 5, also opened by `b` on a result): `Client::browse` → `Event::BrowseResult`. `share_list_as_response` turns the list into a `SearchResponse`, so the same `Results` tree, filter and download code serve both tabs (`Which::{Search, Browse}`). `render_result_list` draws either, with `show_user: false` for browse.
